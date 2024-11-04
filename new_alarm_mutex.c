@@ -32,6 +32,9 @@ typedef struct alarm_tag
 } alarm_t;
 
 pthread_mutex_t alarm_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t alarm_cond = PTHREAD_COND_INITIALIZER;
+
+
 alarm_t *alarm_list = NULL;
 
 /*
@@ -53,7 +56,14 @@ void *alarm_thread(void *arg)
         status = pthread_mutex_lock(&alarm_mutex);
         if (status != 0)
             err_abort(status, "Lock mutex");
+
+        while(alarm_list == NULL) {
+            //Wait for a signal if no alarm is present in the list
+            pthread_cond_wait(&alarm_cond, &alarm_mutex);
+        }
         alarm = alarm_list;
+        alarm_list = alarm->link;
+        now = time(NULL);
 
         /*
          * If the alarm list is empty, wait for one second. This
@@ -63,21 +73,14 @@ void *alarm_thread(void *arg)
          * result is less than 0 (the time has passed), then set
          * the sleep_time to 0.
          */
-        if (alarm == NULL)
-            sleep_time = 1;
+        if (alarm->time <= now)
+            sleep_time = 0;
         else
-        {
-            alarm_list = alarm->link;
-            now = time(NULL);
-            if (alarm->time <= now)
-                sleep_time = 0;
-            else
-                sleep_time = alarm->time - now;
+            sleep_time = alarm->time - now;
 #ifdef DEBUG
             printf("[waiting: %d(%d)\"%s\"]\n", alarm->time,
                    sleep_time, alarm->message);
 #endif
-        }
 
         /*
          * Unlock the mutex before waiting, so that the main
@@ -96,8 +99,6 @@ void *alarm_thread(void *arg)
         if (sleep_time > 0) {
             sleep(sleep_time);
         }
-        else
-            sched_yield();
 
         /*
          * If a timer expired, print the message and free the
@@ -131,10 +132,14 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
             if (next->time >= alarm->time) {
                 alarm->link = next;
                 *last = alarm;
+
                 break;
             }
             last = &next->link;
             next = next->link;
+
+            //wake up the alarm thread and insert the new alarm
+            pthread_cond_signal(&alarm_cond);
         }
 
         /*
@@ -184,21 +189,20 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
         alarm->time = time(NULL) + alarm->seconds;
 
         // Insert the new alarm in the list sorted by expiration time
-
-        /*TODO: changing the alarm when there's only one alarm in the list fucks it up
-         *But it will work if there's more than two alarms.
-         *issue was also replicated in the OG source file so idk.
-         */
         while (next != NULL) {
-            printf("%p\n", next);
-            printf("%p\n", next->link);
-            printf("%p\n", *last);
+
             if (next->id == alarm->id && strcmp(next->type, alarm->type) == 0) {
                 strcpy(next->type, alarm->type);
                 strcpy(next->message, alarm->message);
                 next->time = alarm->time;
                 break;
             }
+
+        }
+
+        if (next == NULL) {
+            *last = alarm;
+            alarm->link = NULL;
         }
 
             if (next == NULL) {
