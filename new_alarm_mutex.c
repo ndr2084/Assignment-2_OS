@@ -65,14 +65,6 @@ void *alarm_thread(void *arg)
         alarm_list = alarm->link;
         now = time(NULL);
 
-        /*
-         * If the alarm list is empty, wait for one second. This
-         * allows the main thread to run, and read another
-         * command. If the list is not empty, remove the first
-         * item. Compute the number of seconds to wait -- if the
-         * result is less than 0 (the time has passed), then set
-         * the sleep_time to 0.
-         */
         if (alarm->time <= now)
             sleep_time = 0;
         else
@@ -138,7 +130,10 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
             last = &next->link;
             next = next->link;
 
-            //wake up the alarm thread and insert the new alarm
+            /*
+             *pthread_cond_signal(&alarm_cond) solves the problem of having two insert
+             *2 alarms just to push the first one into the list
+             */
             pthread_cond_signal(&alarm_cond);
         }
 
@@ -197,30 +192,55 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
                 next->time = alarm->time;
                 break;
             }
-
-        }
-
-        if (next == NULL) {
-            *last = alarm;
-            alarm->link = NULL;
+            next = next->link;
         }
 
             if (next == NULL) {
-                printf("%p\n", next);
-                printf("%p\n", next->link);
-                printf("%p\n", *last);
-                printf("error, alarm not found\n");
+                printf("Alarm not found\n");
             }
-        printf("Alarm(%d) Changed at (%lu) Into Alarm List at %lu: %s\n",
-        alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+        else {
+            printf("Alarm(%d) Changed at (%lu) Into Alarm List at %lu: %s\n",
+            alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+        }
         status = pthread_mutex_unlock(&alarm_mutex);
         if (status != 0)
             err_abort(status, "Unlock mutex");
 
             }
 
-    if(flag_input == 1) {
+    if(flag_input == 1)/*cancel alarm*/ {
+        status = pthread_mutex_lock(&alarm_mutex);
+        last = &alarm_list;
+        next = *last;
+        if (status != 0) {
+            err_abort(status, "Lock mutex");
+        }
+        // Set the alarm time based on the current time and the specified seconds
 
+        // Insert the new alarm in the list sorted by expiration time
+        while (next != NULL) {
+
+            if (next->id == alarm->id) {
+
+                *last = next->link; //link to the node ahead of it
+                free(next); //delete next
+                break;
+            }
+            last = &next->link;
+            next = next->link;
+        }
+
+        if (next == NULL) {
+            printf("Alarm not found\n");
+        }
+        else {
+            printf("Alarm(%d) Cancelled at (%lu): Alarm Removed From Alarm List\n",
+            alarm->id, (unsigned long)time(NULL));
+
+        }
+        status = pthread_mutex_unlock(&alarm_mutex);
+        if (status != 0)
+            err_abort(status, "Unlock mutex");
     }
         }
 
