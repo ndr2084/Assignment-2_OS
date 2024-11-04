@@ -111,56 +111,15 @@ void *alarm_thread(void *arg)
     }
 }
 
-void linked_list_change_alarm(alarm_t *alarm, alarm_t *next, alarm_t **last, int *status) {
-    last = &alarm_list;
-    next = *last;
 
-    // Lock the mutex for thread safety
-    *status = pthread_mutex_lock(&alarm_mutex);
-    if (*status != 0) {
-        err_abort(*status, "Lock mutex");
-    }
+void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, alarm_t **last, int status, int flag_input) {
 
-    // Set the alarm time based on the current time and the specified seconds
-    alarm->time = time(NULL) + alarm->seconds;
 
-    // Insert the new alarm in the list sorted by expiration time
-    while (next != NULL) {
-        if (next->time >= alarm->time) {
-            alarm->link = next;
-            *last = alarm;
-            break;
-        }
-        last = &(next->link);
-        next = next->link;
-    }
+    if(flag_input == 3)/*Start_Alarm*/ {
 
-    // If we reached the end of the list, add the alarm at the end
-    if (next == NULL) {
-        *last = alarm;
-        alarm->link = NULL;
-    }
-
-#ifdef DEBUG
-    printf("[list: ");
-    for (next = alarm_list; next != NULL; next = next->link)
-        printf("%d(%d)[\"%s\"] ", next->time, next->time - time(NULL), next->message);
-    printf("]\n");
-#endif
-
-    // Unlock the mutex
-    *status = pthread_mutex_unlock(&alarm_mutex);
-    if (*status != 0) {
-        err_abort(*status, "Unlock mutex");
-    }
-}
-
-void linked_list_add_alarm(alarm_t *alarm, unsigned long main_thread, alarm_t *next, alarm_t **last, int status, int flag_input) {
-    last = &alarm_list;
-    next = *last;
-
-    if(flag_input == 3) {
         status = pthread_mutex_lock(&alarm_mutex);
+        last = &alarm_list;
+        next = *last;
         if (status != 0) {
             err_abort(status, "Lock mutex");
         }
@@ -213,7 +172,39 @@ void linked_list_add_alarm(alarm_t *alarm, unsigned long main_thread, alarm_t *n
             err_abort(status, "Unlock mutex");
         }
     }
-}
+
+    if(flag_input == 4) {
+        last = &alarm_list;
+        next = *last;
+        if (status != 0) {
+            err_abort(status, "Lock mutex");
+        }
+        // Set the alarm time based on the current time and the specified seconds
+        alarm->time = time(NULL) + alarm->seconds;
+
+        // Insert the new alarm in the list sorted by expiration time
+
+        while (alarm_list != NULL) {
+            status = pthread_mutex_lock(&alarm_mutex);
+            if (next->id == alarm->id && strcmp(next->type, alarm->type) == 0) {
+                strcpy(next->type, alarm->type);
+                strcpy(next->message, alarm->message);
+                next->time = alarm->time;
+                status = pthread_mutex_unlock(&alarm_mutex);
+                if (status != 0)
+                    err_abort(status, "Unlock mutex");
+                break;
+            }
+        }
+
+            if (next == NULL) {
+                printf("error, alarm not found\n");
+            }
+        printf("Alarm(%d) Changed at (%lu) Into Alarm List at %lu: %s\n",
+            alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+
+            }
+        }
 
 int input_validator(const char *keyword, int user_arg ) {
     //if input is valid, return flag that corresponds to the keyword
@@ -278,9 +269,8 @@ int main(int argc, char *argv[]) {
         }
 
         else {
-            linked_list_add_alarm(alarm, main_thread, next, last, &status, flag_input);
+            alarm_operations(alarm, main_thread, next, last, status, flag_input);
         }
     }
 }
-
 
