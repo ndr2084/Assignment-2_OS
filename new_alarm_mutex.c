@@ -156,61 +156,62 @@ void linked_list_change_alarm(alarm_t *alarm, alarm_t *next, alarm_t **last, int
 }
 
 void linked_list_add_alarm(alarm_t *alarm, unsigned long main_thread, alarm_t *next, alarm_t **last, int status, int flag_input) {
-
-    status = pthread_mutex_lock(&alarm_mutex);
-    if (status != 0) {
-        err_abort(status, "Lock mutex");
-    }
-
-    // Set the alarm time based on the current time and the specified seconds
-    alarm->time = time(NULL) + alarm->seconds;
     last = &alarm_list;
     next = *last;
 
-    // Insert the new alarm in the list sorted by expiration time
-    while (next != NULL) {
-        if (next->time >= alarm->time) {
-            alarm->link = next;
-            *last = alarm;
-            break;
+    if(flag_input == 3) {
+        status = pthread_mutex_lock(&alarm_mutex);
+        if (status != 0) {
+            err_abort(status, "Lock mutex");
         }
-        last = &next->link;
-        next = next->link;
-    }
+        // Set the alarm time based on the current time and the specified seconds
+        alarm->time = time(NULL) + alarm->seconds;
 
-    /*
-    * If we reached the end of the list, insert the new
-    * alarm there. ("next" is NULL, and "last" points
-    * to the link field of the last item, or to the
-    * list header).
-    */
-    if (next == NULL) {
-        *last = alarm;
-        alarm->link = NULL;
-    }
+        // Insert the new alarm in the list sorted by expiration time
+        while (next != NULL) {
+            if (next->time >= alarm->time) {
+                alarm->link = next;
+                *last = alarm;
+                break;
+            }
+            last = &next->link;
+            next = next->link;
+        }
+
+        /*
+        * If we reached the end of the list, insert the new
+        * alarm there. ("next" is NULL, and "last" points
+        * to the link field of the last item, or to the
+        * list header).
+        */
+        if (next == NULL) {
+            *last = alarm;
+            alarm->link = NULL;
+        }
 
 #ifdef DEBUG
-    printf("[list: ");
-    for (next = alarm_list; next != NULL; next = next->link)
-        printf("%d(%d)[\"%s\"] ", next->time, next->time - time(NULL), next->message);
-    printf("]\n");
+        printf("[list: ");
+        for (next = alarm_list; next != NULL; next = next->link)
+            printf("%d(%d)[\"%s\"] ", next->time, next->time - time(NULL), next->message);
+        printf("]\n");
 #endif
 
-    /*A.3.2.1 - For each valid Start_Alarm request received, the main thread will insert the
-            corresponding alarm with the specified Alarm_ID into the alarm list, in which all the
-            alarms are placed in the order of their Alarm_IDs. Then the main thread will print:
-            “Alarm( <alarm_id>) Inserted by Main Thread (<thread-id>) Into Alarm List at
-            <insert_time>: <time message>”.
-            */
+        /*A.3.2.1 - For each valid Start_Alarm request received, the main thread will insert the
+                corresponding alarm with the specified Alarm_ID into the alarm list, in which all the
+                alarms are placed in the order of their Alarm_IDs. Then the main thread will print:
+                “Alarm( <alarm_id>) Inserted by Main Thread (<thread-id>) Into Alarm List at
+                <insert_time>: <time message>”.
+                */
 
-    // Print insertion message for each valid Start_Alarm request
-    printf("Alarm(%d) Inserted by Main Thread (%lu) Into Alarm List at %lu: %s\n",
-           alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+        // Print insertion message for each valid Start_Alarm request
+        printf("Alarm(%d) Inserted by Main Thread (%lu) Into Alarm List at %lu: %s\n",
+               alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
 
-    // Unlock the mutex
-    status = pthread_mutex_unlock(&alarm_mutex);
-    if (status != 0) {
-        err_abort(status, "Unlock mutex");
+        // Unlock the mutex
+        status = pthread_mutex_unlock(&alarm_mutex);
+        if (status != 0) {
+            err_abort(status, "Unlock mutex");
+        }
     }
 }
 
