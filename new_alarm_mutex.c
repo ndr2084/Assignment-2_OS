@@ -53,12 +53,14 @@ void *alarm_thread(void *arg)
      */
     while (1)
     {
+        //LOCK
         status = pthread_mutex_lock(&alarm_mutex);
         if (status != 0)
             err_abort(status, "Lock mutex");
 
         while(alarm_list == NULL) {
-            //Wait for a signal if no alarm is present in the list
+
+            //COND-WAIT -- if there is no alarm in the list yet
             pthread_cond_wait(&alarm_cond, &alarm_mutex);
         }
         alarm = alarm_list;
@@ -82,9 +84,8 @@ void *alarm_thread(void *arg)
          * readied by user input, without delaying the message
          * if there's no input.
          */
+        //UNLOCK
         status = pthread_mutex_unlock(&alarm_mutex);
-        /*if display flag is zero, then the alarm is fresh and we will dispaly it*/
-
         if (status != 0)
             err_abort(status, "Unlock mutex");
 
@@ -98,7 +99,7 @@ void *alarm_thread(void *arg)
          */
         if (alarm != NULL)
         {
-            printf("(%d) %s\n", alarm->seconds, alarm->message);
+            printf("Alarm(%d): Alarm Expired at %lu: Alarm Removed From Alarm List\n", alarm->id, (unsigned long)time(NULL));
             free(alarm);
         }
     }
@@ -308,7 +309,8 @@ int main(int argc, char *argv[]) {
 
         else {
             alarm_operations(alarm, main_thread, next, last, status, flag_input);
+            pthread_cond_signal(&alarm_cond);
         }
+
     }
 }
-
