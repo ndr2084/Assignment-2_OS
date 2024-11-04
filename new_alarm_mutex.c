@@ -173,7 +173,8 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
         }
     }
 
-    if(flag_input == 4) {
+    if(flag_input == 4)/*change alarm*/ {
+        status = pthread_mutex_lock(&alarm_mutex);
         last = &alarm_list;
         next = *last;
         if (status != 0) {
@@ -184,26 +185,39 @@ void alarm_operations(alarm_t *alarm, unsigned long main_thread, alarm_t *next, 
 
         // Insert the new alarm in the list sorted by expiration time
 
-        while (alarm_list != NULL) {
-            status = pthread_mutex_lock(&alarm_mutex);
+        /*TODO: changing the alarm when there's only one alarm in the list fucks it up
+         *But it will work if there's more than two alarms.
+         *issue was also replicated in the OG source file so idk.
+         */
+        while (next != NULL) {
+            printf("%p\n", next);
+            printf("%p\n", next->link);
+            printf("%p\n", *last);
             if (next->id == alarm->id && strcmp(next->type, alarm->type) == 0) {
                 strcpy(next->type, alarm->type);
                 strcpy(next->message, alarm->message);
                 next->time = alarm->time;
-                status = pthread_mutex_unlock(&alarm_mutex);
-                if (status != 0)
-                    err_abort(status, "Unlock mutex");
                 break;
             }
         }
 
             if (next == NULL) {
+                printf("%p\n", next);
+                printf("%p\n", next->link);
+                printf("%p\n", *last);
                 printf("error, alarm not found\n");
             }
         printf("Alarm(%d) Changed at (%lu) Into Alarm List at %lu: %s\n",
-            alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+        alarm->id, main_thread, (unsigned long)time(NULL), alarm->message);
+        status = pthread_mutex_unlock(&alarm_mutex);
+        if (status != 0)
+            err_abort(status, "Unlock mutex");
 
             }
+
+    if(flag_input == 1) {
+
+    }
         }
 
 int input_validator(const char *keyword, int user_arg ) {
